@@ -27,23 +27,27 @@ type Claims struct {
 func endpointToken(jwtKey string) func(http.ResponseWriter, *http.Request) {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		token := request.Header.Get("authorization")
-		if s := request.URL.Query().Get("token"); s != "" {
+		if s := request.URL.Query().Get("authorization"); s != "" {
 			token = s
 		}
+		fmt.Printf("token: %s\n", token)
 		claims := &Claims{}
 		if _, err := jwt.ParseWithClaims(token, claims, func(*jwt.Token) (interface{}, error) {
 			return []byte(jwtKey), nil
 		}); err != nil {
-			fmt.Printf("error (%s): %s", claims.Id, err.Error())
+			fmt.Printf("error: %s\n", err.Error())
 			writer.WriteHeader(http.StatusInternalServerError)
 			if _, err := writer.Write([]byte(err.Error())); err != nil {
-				fmt.Printf("error (%s): %s", claims.Id, err.Error())
+				fmt.Printf("error: %s\n", err.Error())
 			}
 			return
 		}
 		ctx := context.WithValue(request.Context(), keyCtxUserId, claims.UserId)
 		ctx = context.WithValue(ctx, keyCtxId, claims.Id)
 		logicAuditing(ctx)
+		if _, err := fmt.Fprintf(writer, "audit (%s); userId: %s\n", claims.Id, claims.UserId); err != nil {
+			fmt.Printf("error: %s\n", err.Error())
+		}
 	}
 }
 
@@ -83,7 +87,7 @@ func Main(pwd string, args []string, envs map[string]string, osSignal chan os.Si
 
 	//generate and create handle func, when connecting, it will use this port
 	// indicate via console that the webserver is starting
-	http.HandleFunc("/", endpointToken(jwtKey))
+	http.HandleFunc("/token", endpointToken(jwtKey))
 	server := &http.Server{
 		Addr:    httpAddress + ":" + httpPort,
 		Handler: nil,
